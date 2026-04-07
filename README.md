@@ -73,7 +73,7 @@ require('nvim-icat').setup({
 
 ### Commands
 
-- `:ImageShow <path>` - Display an image from the specified path
+- `:IcatShow <path>` - Display an image from the specified path
 
 ### Lua API
 
@@ -99,7 +99,7 @@ The image tab will also auto-close when you switch to another tab.
 
 ```lua
 -- Display an image
-:ImageShow ~/Pictures/photo.jpg
+:IcatShow ~/Pictures/photo.jpg
 
 -- From Lua
 :lua require('nvim-icat').show_image(vim.fn.expand('~/Pictures/photo.jpg'))

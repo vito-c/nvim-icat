@@ -90,15 +90,15 @@ With custom configuration:
 ==============================================================================
 5. COMMANDS                                              *nvim-icat-commands*
 
-                                                               *:ImageShow*
-:ImageShow {path}
+                                                               *:IcatShow*
+:IcatShow {path}
     Display the image at the specified path in a new tab.
 
     The path can be absolute or relative. Tab completion is available.
 
     Examples: >
-        :ImageShow ~/Pictures/photo.jpg
-        :ImageShow ./screenshot.png
+        :IcatShow ~/Pictures/photo.jpg
+        :IcatShow ./screenshot.png
 <
 
 ==============================================================================
@@ -171,7 +171,7 @@ imgcat_path                                           *nvim-icat-imgcat_path*
 
 Display an image using the command:
 >
-    :ImageShow ~/Pictures/vacation.jpg
+    :IcatShow ~/Pictures/vacation.jpg
 <
 
 Display an image using Lua:
@@ -230,7 +230,7 @@ Images not displaying~
 4. Ensure the image file exists and is readable
 5. Check that you're not in a nested tmux session (may cause issues)
 
-Command :ImageShow not found~
+Command :IcatShow not found~
 
 Make sure you've called the setup function in your Neovim config:
 >lua

@@ -1,4 +1,4 @@
-:ImageShow	nvim-icat.txt	/*:ImageShow*
+:IcatShow	nvim-icat.txt	/*:IcatShow*
 icat	nvim-icat.txt	/*icat*
 nvim-icat	nvim-icat.txt	/*nvim-icat*
 nvim-icat-about	nvim-icat.txt	/*nvim-icat-about*

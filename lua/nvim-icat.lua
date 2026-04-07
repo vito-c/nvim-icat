@@ -185,7 +185,7 @@ function M.setup(opts)
     debug_log("imgcat script path: " .. IMGCAT_SCRIPT)
 
     -- Create user commands
-    vim.api.nvim_create_user_command('ImageShow', function(args)
+    vim.api.nvim_create_user_command('IcatShow', function(args)
         M.show_image(args.args)
     end, {
         nargs = '?',
