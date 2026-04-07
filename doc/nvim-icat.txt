@@ -42,6 +42,7 @@ Features:
 - iTerm2 (macOS) with inline image support enabled
 - base64 command-line utility (usually pre-installed on macOS)
 - curl (required for URL support)
+- folke/snacks.nvim (optional, required for |:IcatShowPop|)
 
 ==============================================================================
 3. INSTALLATION                                      *nvim-icat-installation*
@@ -55,9 +56,20 @@ Using lazy.nvim: >lua
     }
 <
 
+With |:IcatShowPop| support (requires folke/snacks.nvim): >lua
+    return {
+        'vito-c/nvim-icat',
+        dependencies = { 'folke/snacks.nvim' },
+        config = function()
+            require('nvim-icat').setup()
+        end,
+    }
+<
+
 Using packer.nvim: >lua
     use {
         'vito-c/nvim-icat',
+        requires = { 'folke/snacks.nvim' },  -- optional, for :IcatShowPop
         config = function()
             require('nvim-icat').setup()
         end
@@ -65,6 +77,7 @@ Using packer.nvim: >lua
 <
 
 Using vim-plug: >vim
+    Plug 'folke/snacks.nvim'  " optional, for :IcatShowPop
     Plug 'vito-c/nvim-icat'
 
     lua << EOF
@@ -99,6 +112,16 @@ With custom configuration:
     Examples: >
         :IcatShow ~/Pictures/photo.jpg
         :IcatShow ./screenshot.png
+<
+
+                                                            *:IcatShowPop*
+:IcatShowPop {path}
+    Display the image in a floating popup with a rounded border.
+    Requires folke/snacks.nvim.
+
+    Examples: >
+        :IcatShowPop ~/Pictures/photo.jpg
+        :IcatShowPop ./screenshot.png
 <
 
 ==============================================================================

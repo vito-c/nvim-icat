@@ -25,6 +25,34 @@ local function debug_log(message)
     end
 end
 
+local function get_iterm2_cell_size()
+  -- iTerm2 proprietary sequence: OSC 1337 ; ReportCellSize ST
+  -- \27 is Escape, \7 is BEL (terminator)
+  local query = "\27]1337;ReportCellSize\a"
+  -- Create a pipe to capture stdin (terminal response)
+  local stdin = vim.loop.new_tty(0, true)
+  -- Send the query to stdout
+  io.write(query)
+  io.flush()
+
+  -- Listen for the response
+  stdin:read_start(function(err, data)
+    assert(not err, err)
+    if data then
+      -- Response format: ^[]1337;ReportCellSize=Height;Width;Scale^G
+      local h, w, s = data:match("ReportCellSize=([%d%.]+);([%d%.]+);?([%d%.]*)")
+      if h and w then
+        vim.schedule(function()
+          print(string.format("Cell Size: %sx%s (Scale: %s)", w, h, s ~= "" and s or "1.0"))
+        end)
+      end
+      -- Stop reading and clean up
+      stdin:read_stop()
+      stdin:close()
+    end
+  end)
+end
+
 -- Store the imgcat script path - relative to this plugin file
 -- Gets the directory of the current file and looks for imgcat.lua there
 local current_file_dir = debug.getinfo(1, "S").source:sub(2):match("(.*)/")
@@ -173,6 +201,144 @@ function M.show_image(image_path, options)
     -- Display the image after a short delay to ensure tab is ready
 end
 
+-- Returns terminal cell size in pixels as (cell_w, cell_h).
+-- Tries CSI 16t via TermResponse, then FFI TIOCGWINSZ, then tmux, then falls back to 8x16.
+local function get_cell_px_size()
+    -- 1. CSI 16t — write \033[16t to /dev/tty, spin the event loop until
+    --    Neovim fires TermResponse with \033[6;<height>;<width>t
+    local cell_w, cell_h
+    -- local ok = pcall(function()
+    --     local id = vim.api.nvim_create_autocmd('TermResponse', {
+    --         once = true,
+    --         callback = function(args)
+    --             local seq = (args.data or {}).sequence or ''
+    --             local h, w = seq:match('\027%[6;(%d+);(%d+)t')
+    --             if h and w then
+    --                 cell_w, cell_h = tonumber(w), tonumber(h)
+    --             end
+    --         end,
+    --     })
+    --     local tty = io.open('/dev/tty', 'w')
+    --     if tty then
+    --         tty:write('\027]1337;ReportCellSize[16t')
+    --         tty:flush()
+    --         tty:close()
+    --     end
+    --     vim.wait(500, function() return cell_w ~= nil end, 10)
+    --     if not cell_w then pcall(vim.api.nvim_del_autocmd, id) end
+    -- end)
+    local ok = io.popen("\027]1337;ReportCellSize\a")
+    if ok then
+        local out = ok:read('*a')
+        ok:close()
+        local cw, ch = out:match('(%d+) (%d+)')
+        if cw and ch then return tonumber(cw), tonumber(ch) end
+    end
+    if ok and cell_w and cell_h then return cell_w, cell_h end
+
+    -- 3. tmux: #{client_cell_width} / #{client_cell_height}
+    if os.getenv('TMUX') then
+        local h = io.popen("tmux display-message -p '#{client_cell_width} #{client_cell_height}' 2>/dev/null")
+        if h then
+            local out = h:read('*a')
+            h:close()
+            local cw, ch = out:match('(%d+) (%d+)')
+            if cw and ch then return tonumber(cw), tonumber(ch) end
+        end
+    end
+
+    -- 4. Fallback
+    return 8, 16
+end
+
+-- Cache cell size so we only query once per session
+local _cell_px_w, _cell_px_h
+
+local function cell_px_size()
+    if not _cell_px_w then
+        _cell_px_w, _cell_px_h = get_cell_px_size()
+        debug_log(string.format("cell pixel size: %dx%d", _cell_px_w, _cell_px_h))
+    end
+    return _cell_px_w, _cell_px_h
+end
+
+-- Returns image dimensions in character cells using sips (macOS built-in).
+-- Falls back to nil if sips is unavailable or the image can't be read.
+local function image_size_in_cells(image_path)
+    local handle = io.popen(string.format('sips -g pixelWidth -g pixelHeight "%s" 2>/dev/null', image_path))
+    if not handle then return nil, nil end
+    local out = handle:read("*a")
+    handle:close()
+    local px_w = tonumber(out:match("pixelWidth: (%d+)"))
+    local px_h = tonumber(out:match("pixelHeight: (%d+)"))
+    if not px_w or not px_h then return nil, nil end
+    local cw, ch = cell_px_size()
+    return math.ceil(px_w / cw), math.ceil(px_h / ch)
+end
+
+-- Function to show image in a floating popup using snacks.nvim
+function M.show_image_popup(image_path, options)
+    options = options or {}
+
+    debug_log("Loading image in popup: " .. image_path)
+
+    if vim.fn.filereadable(image_path) == 0 then
+        vim.notify('Image file not found: ' .. image_path, vim.log.levels.ERROR)
+        return
+    end
+
+    if not check_imgcat() then return end
+
+    local filename = vim.fn.fnamemodify(image_path, ':t')
+
+    -- Gather sizing info
+    local cell_w, cell_h = cell_px_size()
+    local img_w, img_h = image_size_in_cells(image_path)
+    local max_w = math.floor(vim.o.columns * 0.92)
+    local max_h = math.floor(vim.o.lines * 0.92)
+
+    local win_w, win_h
+    if img_w and img_h then
+        local scale = math.min(1.0, max_w / img_w, max_h / img_h)
+        win_w = math.max(20, math.floor(img_w * scale))
+        win_h = math.max(6,  math.floor(img_h * scale))
+    else
+        win_w = math.floor(vim.o.columns * 0.8)
+        win_h = math.floor(vim.o.lines * 0.8)
+    end
+
+    local snacks_win = Snacks.win({
+        border = 'rounded',
+        width = win_w,
+        height = win_h,
+        title = ' ' .. filename .. ' ',
+        title_pos = 'center',
+        bo = {
+            buftype = 'nofile',
+            bufhidden = 'wipe',
+            swapfile = false,
+            filetype = 'image_viewer',
+        },
+        keys = {
+            q = 'close',
+            ['<Esc>'] = 'close',
+        },
+    })
+
+    vim.defer_fn(function()
+        require('imgcat').main({ image_path })
+
+        vim.notify(
+            string.format(
+                'image: %s x %s cells  |  window: %d x %d cells  |  cell: %d x %d px',
+                img_w or '?', img_h or '?', win_w, win_h, cell_w, cell_h
+            ),
+            vim.log.levels.INFO,
+            { title = 'icat' }
+        )
+    end, 100)
+end
+
 -- Setup function for configuration
 function M.setup(opts)
     opts = opts or {}
@@ -190,7 +356,15 @@ function M.setup(opts)
     end, {
         nargs = '?',
         complete = 'file',
-        desc = 'Show image in popup'
+        desc = 'Show image in a new tab'
+    })
+
+    vim.api.nvim_create_user_command('IcatShowPop', function(args)
+        M.show_image_popup(args.args)
+    end, {
+        nargs = '?',
+        complete = 'file',
+        desc = 'Show image in a floating popup'
     })
 
     debug_log("setup complete")

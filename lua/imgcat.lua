@@ -90,7 +90,7 @@ local function get_tty_name()
     debug_log("read handle ")
     handle:close()
     debug_log("closed handle " .. result)
-    result = vim.fn.trim(result)
+    result = result:match("^%s*(.-)%s*$")
     debug_log("Found tty: " .. result)
     if result == "" then return nil end
     return result
