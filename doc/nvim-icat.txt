@@ -133,6 +133,7 @@ nvim-icat.setup({opts})                             *nvim-icat.setup()*
     Parameters: ~
         {opts}  (table) Optional configuration table with these fields:
                 - imgcat_path: Custom path to imgcat.lua script
+                - file_browser: Configure oil.nvim/netrw <CR> integration
 
     Usage: >lua
         require('nvim-icat').setup()
@@ -186,6 +187,31 @@ imgcat_path                                           *nvim-icat-imgcat_path*
     Example: >lua
         require('nvim-icat').setup({
             imgcat_path = '~/.config/nvim/scripts/imgcat.lua'
+        })
+<
+
+file_browser                                       *nvim-icat-file_browser*
+    Type: table
+    Default: { enabled = true, key = "<CR>" }
+
+    Adds a buffer-local mapping in oil.nvim and netrw buffers. When the cursor
+    is on a local image file, the mapping opens |:IcatShowPop|. Directories and
+    non-image files fall back to the file browser's normal open action.
+
+    Example: >lua
+        require('nvim-icat').setup({
+            file_browser = {
+                enabled = true,
+                key = '<CR>',
+            },
+        })
+<
+
+    Disable the file browser integration: >lua
+        require('nvim-icat').setup({
+            file_browser = {
+                enabled = false,
+            },
         })
 <
 

@@ -65,7 +65,14 @@ require('nvim-icat').setup()
 ```lua
 require('nvim-icat').setup({
     -- Custom path to imgcat.lua if needed
-    imgcat_path = '/path/to/imgcat.lua'
+    imgcat_path = '/path/to/imgcat.lua',
+
+    -- Map <CR> in oil.nvim and netrw to open image files in a popup.
+    -- Non-image entries still open with the file browser's normal action.
+    file_browser = {
+        enabled = true,
+        key = '<CR>',
+    },
 })
 ```
 
@@ -74,6 +81,30 @@ require('nvim-icat').setup({
 ### Commands
 
 - `:IcatShow <path>` - Display an image from the specified path
+- `:IcatShowPop <path>` - Display an image in a floating popup
+
+### File Browser Integration
+
+By default, `setup()` maps `<CR>` in oil.nvim and netrw buffers. Pressing `<CR>` on an image file opens the image popup; pressing `<CR>` on a directory or non-image file keeps the browser's normal open behavior.
+
+```lua
+require('nvim-icat').setup({
+    file_browser = {
+        enabled = true,
+        key = '<CR>',
+    },
+})
+```
+
+To disable the file browser mapping:
+
+```lua
+require('nvim-icat').setup({
+    file_browser = {
+        enabled = false,
+    },
+})
+```
 
 ### Lua API
 

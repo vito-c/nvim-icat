@@ -5,6 +5,20 @@ local M = {}
 local DEBUG_ENABLED = os.getenv("IMGCAT_DEBUG") == "1" or false
 local DEBUG_FILE = "debug-plugin.txt"
 local debug_file_handle = nil
+local IMAGE_EXTENSIONS = {
+    avif = true,
+    bmp = true,
+    gif = true,
+    heic = true,
+    heif = true,
+    ico = true,
+    jpeg = true,
+    jpg = true,
+    png = true,
+    tif = true,
+    tiff = true,
+    webp = true,
+}
 
 local function debug_log(message)
     if not DEBUG_ENABLED then return end
@@ -23,6 +37,64 @@ local function debug_log(message)
         debug_file_handle:write(string.format("[%s] %s\n", os.date("%Y-%m-%d %H:%M:%S"), message))
         debug_file_handle:flush()
     end
+end
+
+local function join_path(dir, name)
+    if not dir or dir == "" or not name or name == "" then return nil end
+    if name:match("^/") or name:match("^%a:[/\\]") then return name end
+    return dir:gsub("[/\\]$", "") .. "/" .. name
+end
+
+local function is_image_file(path)
+    if not path or path == "" then return false end
+
+    local expanded = vim.fn.fnamemodify(vim.fn.expand(path), ":p")
+    local ext = vim.fn.fnamemodify(expanded, ":e"):lower()
+    return IMAGE_EXTENSIONS[ext] and vim.fn.filereadable(expanded) == 1
+end
+
+local function open_regular_file_browser_entry()
+    if vim.bo.filetype == "oil" then
+        local ok, actions = pcall(require, "oil.actions")
+        if ok and actions.select and actions.select.callback then
+            actions.select.callback()
+            return true
+        end
+    elseif vim.bo.filetype == "netrw" then
+        local keys = vim.api.nvim_replace_termcodes("<Plug>NetrwLocalBrowseCheck", true, false, true)
+        vim.api.nvim_feedkeys(keys, "m", false)
+        return true
+    end
+
+    return false
+end
+
+local function oil_cursor_path()
+    local ok, oil = pcall(require, "oil")
+    if not ok then return nil end
+
+    local entry = oil.get_cursor_entry()
+    if not entry or entry.type == "directory" then return nil end
+
+    local dir = oil.get_current_dir()
+    if not dir or dir:match("^%w+://") then return nil end
+
+    return join_path(dir, entry.name)
+end
+
+local function netrw_cursor_path()
+    local dir = vim.b.netrw_curdir
+    if not dir or dir == "" then return nil end
+
+    local ok, name = pcall(vim.fn["netrw#Call"], "NetrwGetWord")
+    if not ok or not name or name == "" then
+        name = vim.fn.expand("<cfile>")
+    end
+
+    name = (name or ""):gsub("^%s+", ""):gsub("%s+$", "")
+    if name == "" or name == "./" or name == "../" then return nil end
+
+    return join_path(dir, name)
 end
 
 local function get_iterm2_cell_size()
@@ -361,6 +433,48 @@ function M.show_image_popup(image_path, options)
     end, 100)
 end
 
+function M.open_file_browser_entry()
+    local path
+    if vim.bo.filetype == "oil" then
+        path = oil_cursor_path()
+    elseif vim.bo.filetype == "netrw" then
+        path = netrw_cursor_path()
+    else
+        return false
+    end
+
+    if is_image_file(path) then
+        M.show_image_popup(path)
+        return true
+    end
+
+    return open_regular_file_browser_entry()
+end
+
+local function setup_file_browser_mapping(opts)
+    opts = opts or {}
+    if opts.enabled == false then return end
+
+    local key = opts.key or "<CR>"
+    local group = vim.api.nvim_create_augroup("NvimIcatFileBrowser", { clear = true })
+    vim.api.nvim_create_autocmd("FileType", {
+        group = group,
+        pattern = { "oil", "netrw" },
+        callback = function(args)
+            vim.schedule(function()
+                if not vim.api.nvim_buf_is_valid(args.buf) then return end
+                vim.keymap.set("n", key, function()
+                    M.open_file_browser_entry()
+                end, {
+                    buffer = args.buf,
+                    desc = "Open image in icat popup",
+                    silent = true,
+                })
+            end)
+        end,
+    })
+end
+
 -- Setup function for configuration
 function M.setup(opts)
     opts = opts or {}
@@ -388,6 +502,8 @@ function M.setup(opts)
         complete = 'file',
         desc = 'Show image in a floating popup'
     })
+
+    setup_file_browser_mapping(opts.file_browser)
 
     debug_log("setup complete")
 end

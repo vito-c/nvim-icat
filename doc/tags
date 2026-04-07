@@ -8,6 +8,7 @@ nvim-icat-configuration	nvim-icat.txt	/*nvim-icat-configuration*
 nvim-icat-contents	nvim-icat.txt	/*nvim-icat-contents*
 nvim-icat-debug	nvim-icat.txt	/*nvim-icat-debug*
 nvim-icat-examples	nvim-icat.txt	/*nvim-icat-examples*
+nvim-icat-file_browser	nvim-icat.txt	/*nvim-icat-file_browser*
 nvim-icat-functions	nvim-icat.txt	/*nvim-icat-functions*
 nvim-icat-imgcat_path	nvim-icat.txt	/*nvim-icat-imgcat_path*
 nvim-icat-installation	nvim-icat.txt	/*nvim-icat-installation*
