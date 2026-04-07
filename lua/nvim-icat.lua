@@ -201,54 +201,71 @@ function M.show_image(image_path, options)
     -- Display the image after a short delay to ensure tab is ready
 end
 
--- Returns terminal cell size in pixels as (cell_w, cell_h).
--- Tries CSI 16t via TermResponse, then FFI TIOCGWINSZ, then tmux, then falls back to 8x16.
-local function get_cell_px_size()
-    -- 1. CSI 16t — write \033[16t to /dev/tty, spin the event loop until
-    --    Neovim fires TermResponse with \033[6;<height>;<width>t
-    local cell_w, cell_h
-    -- local ok = pcall(function()
-    --     local id = vim.api.nvim_create_autocmd('TermResponse', {
-    --         once = true,
-    --         callback = function(args)
-    --             local seq = (args.data or {}).sequence or ''
-    --             local h, w = seq:match('\027%[6;(%d+);(%d+)t')
-    --             if h and w then
-    --                 cell_w, cell_h = tonumber(w), tonumber(h)
-    --             end
-    --         end,
-    --     })
-    --     local tty = io.open('/dev/tty', 'w')
-    --     if tty then
-    --         tty:write('\027]1337;ReportCellSize[16t')
-    --         tty:flush()
-    --         tty:close()
-    --     end
-    --     vim.wait(500, function() return cell_w ~= nil end, 10)
-    --     if not cell_w then pcall(vim.api.nvim_del_autocmd, id) end
-    -- end)
-    local ok = io.popen("\027]1337;ReportCellSize\a")
-    if ok then
-        local out = ok:read('*a')
-        ok:close()
-        local cw, ch = out:match('(%d+) (%d+)')
-        if cw and ch then return tonumber(cw), tonumber(ch) end
-    end
-    if ok and cell_w and cell_h then return cell_w, cell_h end
+local function parse_iterm_cell_size(out)
+    if not out or out == "" then return nil, nil end
 
-    -- 3. tmux: #{client_cell_width} / #{client_cell_height}
+    -- iTerm2 response format: ESC ] 1337 ; ReportCellSize=Height;Width;Scale BEL
+    -- Also accepts manually stripped output like Height;Width;Scale.
+    local h, w, s = out:match("ReportCellSize=([%d%.]+);([%d%.]+);([%d%.]+)")
+    if not h or not w then
+        h, w, s = out:match("^%s*([%d%.]+);([%d%.]+);([%d%.]+)")
+    end
+
+    if s then s = tonumber(s) else s = 1 end
+    if h and w then return tonumber(w)*s, tonumber(h)*s end
+    return nil, nil
+end
+
+-- Returns terminal cell size in pixels as (cell_w, cell_h).
+-- Tries iTerm2 ReportCellSize, then tmux, then falls back to 8x16.
+local function get_cell_px_size()
+    -- 1. iTerm2 ReportCellSize.
+    local cell_w, cell_h
+    local autocmd_id
+    local ok, err = pcall(function()
+        autocmd_id = vim.api.nvim_create_autocmd('TermResponse', {
+            callback = function(args)
+                local out = ((args.data or {}).sequence or vim.v.termresponse or '')
+                debug_log(string.format("ReportCellSize response: %q", out))
+
+                local cw, ch = parse_iterm_cell_size(out)
+                if cw and ch then
+                    cell_w, cell_h = cw, ch
+                    pcall(vim.api.nvim_del_autocmd, autocmd_id)
+                end
+            end,
+        })
+
+        io.stdout:write("\027]1337;ReportCellSize\a")
+        io.stdout:flush()
+        vim.wait(500, function() return cell_w ~= nil end, 10)
+    end)
+
+    if autocmd_id and not cell_w then
+        pcall(vim.api.nvim_del_autocmd, autocmd_id)
+    end
+    if not ok then
+        debug_log("ReportCellSize probe failed: " .. tostring(err))
+    elseif not cell_w then
+        debug_log("ReportCellSize probe timed out")
+    end
+    if ok and cell_w and cell_h then
+        return cell_w, cell_h, "iterm2"
+    end
+
+    -- 2. tmux: #{client_cell_width} / #{client_cell_height}
     if os.getenv('TMUX') then
         local h = io.popen("tmux display-message -p '#{client_cell_width} #{client_cell_height}' 2>/dev/null")
         if h then
             local out = h:read('*a')
             h:close()
             local cw, ch = out:match('(%d+) (%d+)')
-            if cw and ch then return tonumber(cw), tonumber(ch) end
+            if cw and ch then return tonumber(cw), tonumber(ch), "tmux" end
         end
     end
 
-    -- 4. Fallback
-    return 8, 16
+    -- 3. Fallback.
+    return 8, 16, "fallback"
 end
 
 -- Cache cell size so we only query once per session
@@ -256,8 +273,13 @@ local _cell_px_w, _cell_px_h
 
 local function cell_px_size()
     if not _cell_px_w then
-        _cell_px_w, _cell_px_h = get_cell_px_size()
-        debug_log(string.format("cell pixel size: %dx%d", _cell_px_w, _cell_px_h))
+        local cell_w, cell_h, source = get_cell_px_size()
+        debug_log(string.format("cell pixel size: %dx%d (%s)", cell_w, cell_h, source))
+        if source ~= "fallback" then
+            _cell_px_w, _cell_px_h = cell_w, cell_h
+        else
+            return cell_w, cell_h
+        end
     end
     return _cell_px_w, _cell_px_h
 end
