@@ -1,0 +1,270 @@
+*nvim-icat.txt* *nvim-icat* *icat*  Display images inline in iTerm2 from Neovim
+
+Author:  vito-c
+License: MIT
+Version: 1.0
+
+==============================================================================
+CONTENTS                                                 *nvim-icat-contents*
+
+    1. Introduction ..................... |nvim-icat-introduction|
+    2. Requirements ..................... |nvim-icat-requirements|
+    3. Installation ..................... |nvim-icat-installation|
+    4. Setup ............................ |nvim-icat-setup|
+    5. Commands ......................... |nvim-icat-commands|
+    6. Functions ........................ |nvim-icat-functions|
+    7. Key Bindings ..................... |nvim-icat-keybindings|
+    8. Configuration .................... |nvim-icat-configuration|
+    9. Examples ......................... |nvim-icat-examples|
+   10. Debug Logging .................... |nvim-icat-debug|
+   11. Troubleshooting .................. |nvim-icat-troubleshooting|
+   12. About ............................ |nvim-icat-about|
+
+==============================================================================
+1. INTRODUCTION                                      *nvim-icat-introduction*
+
+nvim-icat is a Neovim plugin that allows you to display images directly
+within Neovim using iTerm2's Inline Images Protocol. Images are displayed in
+a dedicated tab with automatic cleanup and intuitive key bindings.
+
+Features:
+  - Display images inline using iTerm2's protocol
+  - Opens images in a clean, dedicated tab
+  - Auto-close with q or <Esc>
+  - Support for custom image dimensions
+  - Works with local files and URLs
+  - Debug logging support
+
+==============================================================================
+2. REQUIREMENTS                                      *nvim-icat-requirements*
+
+- Neovim 0.5 or higher
+- iTerm2 (macOS) with inline image support enabled
+- base64 command-line utility (usually pre-installed on macOS)
+- curl (required for URL support)
+
+==============================================================================
+3. INSTALLATION                                      *nvim-icat-installation*
+
+Using lazy.nvim: >lua
+    return {
+        'vito-c/nvim-icat',
+        config = function()
+            require('nvim-icat').setup()
+        end,
+    }
+<
+
+Using packer.nvim: >lua
+    use {
+        'vito-c/nvim-icat',
+        config = function()
+            require('nvim-icat').setup()
+        end
+    }
+<
+
+Using vim-plug: >vim
+    Plug 'vito-c/nvim-icat'
+
+    lua << EOF
+    require('nvim-icat').setup()
+    EOF
+<
+
+==============================================================================
+4. SETUP                                                    *nvim-icat-setup*
+
+Basic setup:
+>lua
+    require('nvim-icat').setup()
+<
+
+With custom configuration:
+>lua
+    require('nvim-icat').setup({
+        imgcat_path = '/custom/path/to/imgcat.lua'
+    })
+<
+
+==============================================================================
+5. COMMANDS                                              *nvim-icat-commands*
+
+                                                               *:ImageShow*
+:ImageShow {path}
+    Display the image at the specified path in a new tab.
+
+    The path can be absolute or relative. Tab completion is available.
+
+    Examples: >
+        :ImageShow ~/Pictures/photo.jpg
+        :ImageShow ./screenshot.png
+<
+
+==============================================================================
+6. FUNCTIONS                                            *nvim-icat-functions*
+
+nvim-icat.setup({opts})                             *nvim-icat.setup()*
+    Setup function to initialize the plugin.
+
+    Parameters: ~
+        {opts}  (table) Optional configuration table with these fields:
+                - imgcat_path: Custom path to imgcat.lua script
+
+    Usage: >lua
+        require('nvim-icat').setup()
+<
+
+nvim-icat.show_image({image_path}, {options})      *nvim-icat.show_image()*
+    Display an image in a new tab.
+
+    Parameters: ~
+        {image_path}  (string) Path to the image file
+        {options}     (table) Optional table with these fields:
+                      - width: Image width (string, e.g., "80", "100px", "50%")
+                      - height: Image height (string, e.g., "40", "200px", "80%")
+
+    Usage: >lua
+        -- Simple usage
+        require('nvim-icat').show_image('/path/to/image.png')
+
+        -- With custom dimensions
+        require('nvim-icat').show_image('/path/to/image.png', {
+            width = '80',
+            height = '40'
+        })
+<
+
+==============================================================================
+7. KEY BINDINGS                                      *nvim-icat-keybindings*
+
+When viewing an image, the following key bindings are available:
+
+    q           Close the image viewer tab
+    <Esc>       Close the image viewer tab
+
+The image tab will also automatically close when you switch to another tab
+(TabLeave event).
+
+==============================================================================
+8. CONFIGURATION                                    *nvim-icat-configuration*
+
+nvim-icat can be configured by passing options to the setup function.
+
+Available options:~
+
+imgcat_path                                           *nvim-icat-imgcat_path*
+    Type: string
+    Default: (auto-detected relative to plugin)
+
+    Custom path to the imgcat.lua script if you want to use a different
+    location.
+
+    Example: >lua
+        require('nvim-icat').setup({
+            imgcat_path = '~/.config/nvim/scripts/imgcat.lua'
+        })
+<
+
+==============================================================================
+9. EXAMPLES                                              *nvim-icat-examples*
+
+Display an image using the command:
+>
+    :ImageShow ~/Pictures/vacation.jpg
+<
+
+Display an image using Lua:
+>lua
+    :lua require('nvim-icat').show_image(vim.fn.expand('~/Pictures/vacation.jpg'))
+<
+
+Display an image with custom size:
+>lua
+    :lua require('nvim-icat').show_image('screenshot.png', {
+        width = '100',
+        height = '50'
+    })
+<
+
+Create a custom key binding:
+>lua
+    vim.keymap.set('n', '<leader>ii', function()
+        vim.ui.input({
+            prompt = 'Image path: ',
+            completion = 'file'
+        }, function(input)
+            if input then
+                require('nvim-icat').show_image(input)
+            end
+        end)
+    end, { desc = 'Show image' })
+<
+
+==============================================================================
+10. DEBUG LOGGING                                          *nvim-icat-debug*
+
+To enable debug logging, set the IMGCAT_DEBUG environment variable before
+starting Neovim:
+
+>bash
+    export IMGCAT_DEBUG=1
+    nvim
+<
+
+Debug logs will be written to:
+    - debug.txt          - imgcat script logs
+    - debug-plugin.txt   - plugin logs
+
+This is useful for troubleshooting issues with image display.
+
+==============================================================================
+11. TROUBLESHOOTING                              *nvim-icat-troubleshooting*
+
+Images not displaying~
+
+1. Verify you're using iTerm2 (this plugin only works in iTerm2)
+2. Check that inline images are enabled in iTerm2 preferences:
+   Preferences > General > Selection > "Copy to pasteboard on selection"
+3. Enable debug logging to see detailed information
+4. Ensure the image file exists and is readable
+5. Check that you're not in a nested tmux session (may cause issues)
+
+Command :ImageShow not found~
+
+Make sure you've called the setup function in your Neovim config:
+>lua
+    require('nvim-icat').setup()
+<
+
+Images appear corrupted or garbled~
+
+1. Try using legacy mode by modifying the imgcat.lua script
+2. Check file permissions on the image
+3. Verify the image file is not corrupted
+
+Performance issues with large images~
+
+Large images may take time to encode and display. Consider:
+1. Using smaller image dimensions
+2. Resizing images before displaying them
+3. Using compressed formats (JPEG vs PNG for photos)
+
+==============================================================================
+12. ABOUT                                                  *nvim-icat-about*
+
+nvim-icat is based on the iTerm2 imgcat script, reimplemented in Lua for
+seamless Neovim integration.
+
+GitHub: https://github.com/vito-c/nvim-icat
+
+For bug reports and feature requests, please use the GitHub issue tracker.
+
+iTerm2 Inline Images Protocol documentation:
+https://iterm2.com/documentation-images.html
+
+Original imgcat script:
+https://iterm2.com/utilities/imgcat
+
+==============================================================================
+vim:tw=78:ts=8:ft=help:norl:
