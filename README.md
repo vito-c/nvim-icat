@@ -6,8 +6,9 @@ A Neovim plugin for displaying images inline in iTerm2 using the Inline Images P
 
 - Display images directly in Neovim using iTerm2's inline image protocol
 - Opens images in a dedicated tab for clean viewing
+- Opens images in a floating popup with Snacks
 - Automatic tab cleanup with `q` or `<Esc>` key bindings
-- Support for custom image dimensions
+- Popup sizing from PNG, GIF, JPEG, and WebP headers without external tools
 - Works with local files and URLs (via curl)
 - Debug logging support
 
@@ -17,6 +18,7 @@ A Neovim plugin for displaying images inline in iTerm2 using the Inline Images P
 - iTerm2 (macOS) with inline image support
 - `base64` command-line utility (usually pre-installed)
 - `curl` (for URL support)
+- ImageMagick `identify` or `magick` (optional fallback for image dimensions outside PNG, GIF, JPEG, and WebP)
 
 ## Installation
 
@@ -105,6 +107,14 @@ bin/icat-popup ./image.png
 
 The script sends a remote expression to Neovim and lets the running plugin handle
 TTY selection. It does not render the image from the shell process.
+
+### Popup Sizing
+
+`IcatShowPop` sizes the popup from image metadata when possible. It first reads
+small file headers directly in Lua for PNG, GIF, JPEG, and WebP, which works
+without extra tools and is useful over SSH. If the header reader cannot determine
+the dimensions, it falls back to `sips`, then ImageMagick's `identify` or
+`magick identify`, and finally to an editor-size fallback.
 
 ### File Browser Integration
 
@@ -207,6 +217,7 @@ All formats supported by iTerm2:
 3. Run `:IcatTty` to check the render-time and startup TTY values
 4. Enable debug logging to see what's happening
 5. Ensure the image file exists and is readable
+6. Install ImageMagick if popup notifications show `image: ? x ? cells` for a format outside PNG, GIF, JPEG, and WebP
 
 ### Command not found
 

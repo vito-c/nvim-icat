@@ -15,11 +15,12 @@ CONTENTS                                                 *nvim-icat-contents*
     6. Functions ........................ |nvim-icat-functions|
     7. Key Bindings ..................... |nvim-icat-keybindings|
     8. CLI Popup ........................ |nvim-icat-cli|
-    9. Configuration .................... |nvim-icat-configuration|
-   10. Examples ......................... |nvim-icat-examples|
-   11. Debug Logging .................... |nvim-icat-debug|
-   12. Troubleshooting .................. |nvim-icat-troubleshooting|
-   13. About ............................ |nvim-icat-about|
+    9. Popup Sizing ..................... |nvim-icat-popup-sizing|
+   10. Configuration .................... |nvim-icat-configuration|
+   11. Examples ......................... |nvim-icat-examples|
+   12. Debug Logging .................... |nvim-icat-debug|
+   13. Troubleshooting .................. |nvim-icat-troubleshooting|
+   14. About ............................ |nvim-icat-about|
 
 ==============================================================================
 1. INTRODUCTION                                      *nvim-icat-introduction*
@@ -33,6 +34,7 @@ Features:
   - Opens images in a clean, dedicated tab
   - Auto-close with q or <Esc>
   - Support for custom image dimensions
+  - Popup sizing from PNG, GIF, JPEG, and WebP headers
   - Works with local files and URLs
   - Debug logging support
 
@@ -44,6 +46,8 @@ Features:
 - base64 command-line utility (usually pre-installed on macOS)
 - curl (required for URL support)
 - folke/snacks.nvim (optional, required for |:IcatShowPop|)
+- ImageMagick identify or magick (optional fallback for image dimensions
+  outside PNG, GIF, JPEG, and WebP)
 
 ==============================================================================
 3. INSTALLATION                                      *nvim-icat-installation*
@@ -196,7 +200,25 @@ running Neovim instance to call |:IcatShowPop|, so TTY selection stays inside
 the plugin.
 
 ==============================================================================
-9. CONFIGURATION                                    *nvim-icat-configuration*
+9. POPUP SIZING                                      *nvim-icat-popup-sizing*
+
+|:IcatShowPop| sizes the popup from image metadata when possible. nvim-icat
+first reads small file headers directly in Lua for PNG, GIF, JPEG, and WebP.
+This does not require external tools and works well when Neovim is running on a
+remote host over SSH.
+
+If the header reader cannot determine image dimensions, nvim-icat falls back to:
+
+    1. sips (macOS)
+    2. ImageMagick identify
+    3. ImageMagick magick identify
+    4. editor-size fallback
+
+When the popup notification says "image: ? x ? cells", nvim-icat could not
+determine the image dimensions and used the editor-size fallback.
+
+==============================================================================
+10. CONFIGURATION                                   *nvim-icat-configuration*
 
 nvim-icat can be configured by passing options to the setup function.
 
@@ -241,7 +263,7 @@ file_browser                                       *nvim-icat-file_browser*
 <
 
 ==============================================================================
-10. EXAMPLES                                             *nvim-icat-examples*
+11. EXAMPLES                                             *nvim-icat-examples*
 
 Display an image using the command:
 >
@@ -276,7 +298,7 @@ Create a custom key binding:
 <
 
 ==============================================================================
-11. DEBUG LOGGING                                          *nvim-icat-debug*
+12. DEBUG LOGGING                                          *nvim-icat-debug*
 
 To enable debug logging, set the IMGCAT_DEBUG environment variable before
 starting Neovim:
@@ -293,7 +315,7 @@ Debug logs will be written to:
 This is useful for troubleshooting issues with image display.
 
 ==============================================================================
-12. TROUBLESHOOTING                              *nvim-icat-troubleshooting*
+13. TROUBLESHOOTING                              *nvim-icat-troubleshooting*
 
 Images not displaying~
 
@@ -303,7 +325,9 @@ Images not displaying~
 3. Run |:IcatTty| to inspect render-time and startup TTY values
 4. Enable debug logging to see detailed information
 5. Ensure the image file exists and is readable
-6. Check that you're not in a nested tmux session (may cause issues)
+6. Install ImageMagick if popup notifications show "image: ? x ? cells" for a
+   format outside PNG, GIF, JPEG, and WebP
+7. Check that you're not in a nested tmux session (may cause issues)
 
 Command :IcatShow not found~
 
@@ -326,7 +350,7 @@ Large images may take time to encode and display. Consider:
 3. Using compressed formats (JPEG vs PNG for photos)
 
 ==============================================================================
-13. ABOUT                                                  *nvim-icat-about*
+14. ABOUT                                                  *nvim-icat-about*
 
 nvim-icat is based on the iTerm2 imgcat script, reimplemented in Lua for
 seamless Neovim integration.

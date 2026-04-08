@@ -422,15 +422,144 @@ local function cell_px_size()
     return _cell_px_w, _cell_px_h
 end
 
--- Returns image dimensions in character cells using sips (macOS built-in).
--- Falls back to nil if sips is unavailable or the image can't be read.
-local function image_size_in_cells(image_path)
-    local handle = io.popen(string.format('sips -g pixelWidth -g pixelHeight "%s" 2>/dev/null', image_path))
+local function be16(data, offset)
+    local b1, b2 = data:byte(offset, offset + 1)
+    if not b1 or not b2 then return nil end
+    return b1 * 256 + b2
+end
+
+local function be32(data, offset)
+    local b1, b2, b3, b4 = data:byte(offset, offset + 3)
+    if not b1 or not b2 or not b3 or not b4 then return nil end
+    return ((b1 * 256 + b2) * 256 + b3) * 256 + b4
+end
+
+local function le16(data, offset)
+    local b1, b2 = data:byte(offset, offset + 1)
+    if not b1 or not b2 then return nil end
+    return b1 + b2 * 256
+end
+
+local function le24(data, offset)
+    local b1, b2, b3 = data:byte(offset, offset + 2)
+    if not b1 or not b2 or not b3 then return nil end
+    return b1 + b2 * 256 + b3 * 65536
+end
+
+local function jpeg_pixel_size(data)
+    if data:sub(1, 2) ~= "\255\216" then return nil, nil end
+
+    local pos = 3
+    while pos + 8 <= #data do
+        while data:byte(pos) == 0xFF do
+            pos = pos + 1
+        end
+
+        local marker = data:byte(pos)
+        if not marker then return nil, nil end
+        pos = pos + 1
+
+        if marker == 0xD9 or marker == 0xDA then
+            return nil, nil
+        elseif marker == 0x01 or (marker >= 0xD0 and marker <= 0xD8) then
+            -- Standalone markers have no segment payload.
+        else
+            local length = be16(data, pos)
+            if not length or length < 2 or pos + length - 1 > #data then return nil, nil end
+
+            local is_sof = marker == 0xC0 or marker == 0xC1 or marker == 0xC2 or
+                marker == 0xC3 or marker == 0xC5 or marker == 0xC6 or
+                marker == 0xC7 or marker == 0xC9 or marker == 0xCA or
+                marker == 0xCB or marker == 0xCD or marker == 0xCE or
+                marker == 0xCF
+            if is_sof then
+                return be16(data, pos + 5), be16(data, pos + 3)
+            end
+
+            pos = pos + length
+        end
+    end
+
+    return nil, nil
+end
+
+local function webp_pixel_size(data)
+    if data:sub(1, 4) ~= "RIFF" or data:sub(9, 12) ~= "WEBP" then return nil, nil end
+
+    local chunk = data:sub(13, 16)
+    if chunk == "VP8X" and #data >= 30 then
+        return le24(data, 25) + 1, le24(data, 28) + 1
+    elseif chunk == "VP8 " and #data >= 30 and data:sub(24, 26) == "\157\001\042" then
+        local w = le16(data, 27)
+        local h = le16(data, 29)
+        if w and h then return w % 16384, h % 16384 end
+    elseif chunk == "VP8L" and #data >= 25 and data:byte(21) == 0x2F then
+        local bits = le16(data, 22) + (le16(data, 24) or 0) * 65536
+        return (bits % 16384) + 1, (math.floor(bits / 16384) % 16384) + 1
+    end
+
+    return nil, nil
+end
+
+local function image_pixel_size_from_header(image_path)
+    local file = io.open(image_path, "rb")
+    if not file then return nil, nil end
+    local data = file:read(1024 * 1024) or ""
+    file:close()
+
+    if data:sub(1, 8) == "\137PNG\r\n\026\n" and data:sub(13, 16) == "IHDR" then
+        return be32(data, 17), be32(data, 21)
+    elseif data:sub(1, 6) == "GIF87a" or data:sub(1, 6) == "GIF89a" then
+        return le16(data, 7), le16(data, 9)
+    elseif data:sub(1, 2) == "\255\216" then
+        return jpeg_pixel_size(data)
+    elseif data:sub(1, 4) == "RIFF" and data:sub(9, 12) == "WEBP" then
+        return webp_pixel_size(data)
+    end
+
+    return nil, nil
+end
+
+local function image_pixel_size_with_sips(image_path)
+    local handle = io.popen(string.format('sips -g pixelWidth -g pixelHeight %s 2>/dev/null', vim.fn.shellescape(image_path)))
     if not handle then return nil, nil end
     local out = handle:read("*a")
     handle:close()
     local px_w = tonumber(out:match("pixelWidth: (%d+)"))
     local px_h = tonumber(out:match("pixelHeight: (%d+)"))
+    return px_w, px_h
+end
+
+local function image_pixel_size_with_identify(image_path)
+    local escaped = vim.fn.shellescape(image_path)
+    local commands = {
+        string.format("identify -format '%%w %%h' %s 2>/dev/null", escaped),
+        string.format("magick identify -format '%%w %%h' %s 2>/dev/null", escaped),
+    }
+
+    for _, cmd in ipairs(commands) do
+        local handle = io.popen(cmd)
+        if handle then
+            local out = handle:read("*a")
+            handle:close()
+            local px_w, px_h = out:match("(%d+)%s+(%d+)")
+            if px_w and px_h then return tonumber(px_w), tonumber(px_h) end
+        end
+    end
+
+    return nil, nil
+end
+
+-- Returns image dimensions in character cells.
+-- Uses small header parsing first, then external tools as fallbacks.
+local function image_size_in_cells(image_path)
+    local px_w, px_h = image_pixel_size_from_header(image_path)
+    if not px_w or not px_h then
+        px_w, px_h = image_pixel_size_with_sips(image_path)
+    end
+    if not px_w or not px_h then
+        px_w, px_h = image_pixel_size_with_identify(image_path)
+    end
     if not px_w or not px_h then return nil, nil end
     local cw, ch = cell_px_size()
     return math.ceil(px_w / cw), math.ceil(px_h / ch)

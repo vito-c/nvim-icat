@@ -217,6 +217,58 @@ io.popen = function(cmd)
 
     if cmd:match("^sips ") then
         return pipe("not image metadata\n")
+    elseif cmd:match("^identify %-format ") then
+        return pipe("240 96")
+    elseif cmd:match("^%[ %-t 0 %]") then
+        return pipe("terminal\n")
+    elseif cmd:match("^which base64") then
+        return pipe("/usr/bin/base64\n")
+    end
+
+    return nil
+end
+calls.imgcat = {}
+calls.imgcat_win = {}
+calls.snacks_win = nil
+vim.cmd("IcatShowPop " .. vim.fn.fnameescape(image_path))
+assert_eq(calls.snacks_win.width, 30, "IcatShowPop should fall back to ImageMagick identify when sips cannot read dimensions")
+assert_eq(calls.snacks_win.height, 6, "IcatShowPop should apply minimum popup height after identify sizing")
+io.popen = original_popen
+
+local png_header = string.char(137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13) ..
+    "IHDR" .. string.char(0, 0, 1, 64, 0, 0, 0, 160, 8, 2, 0, 0, 0)
+local png_file = original.open(image_path, "wb")
+png_file:write(png_header)
+png_file:close()
+io.popen = function(cmd)
+    calls.popen[#calls.popen + 1] = cmd
+
+    if cmd:match("^sips ") then
+        return pipe("not image metadata\n")
+    elseif cmd:match("^identify %-format ") or cmd:match("^magick identify %-format ") then
+        return nil
+    elseif cmd:match("^%[ %-t 0 %]") then
+        return pipe("terminal\n")
+    elseif cmd:match("^which base64") then
+        return pipe("/usr/bin/base64\n")
+    end
+
+    return nil
+end
+calls.imgcat = {}
+calls.imgcat_win = {}
+calls.snacks_win = nil
+vim.cmd("IcatShowPop " .. vim.fn.fnameescape(image_path))
+assert_eq(calls.snacks_win.width, 40, "IcatShowPop should size common images from header metadata before external tools")
+assert_eq(calls.snacks_win.height, 10, "IcatShowPop should use header metadata height")
+io.popen = original_popen
+
+vim.fn.writefile({ "fake image bytes" }, image_path, "b")
+io.popen = function(cmd)
+    calls.popen[#calls.popen + 1] = cmd
+
+    if cmd:match("^sips ") then
+        return pipe("not image metadata\n")
     elseif cmd:match("^%[ %-t 0 %]") then
         return pipe("terminal\n")
     elseif cmd:match("^which base64") then

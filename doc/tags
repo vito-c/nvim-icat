@@ -16,6 +16,7 @@ nvim-icat-imgcat_path	nvim-icat.txt	/*nvim-icat-imgcat_path*
 nvim-icat-installation	nvim-icat.txt	/*nvim-icat-installation*
 nvim-icat-introduction	nvim-icat.txt	/*nvim-icat-introduction*
 nvim-icat-keybindings	nvim-icat.txt	/*nvim-icat-keybindings*
+nvim-icat-popup-sizing	nvim-icat.txt	/*nvim-icat-popup-sizing*
 nvim-icat-requirements	nvim-icat.txt	/*nvim-icat-requirements*
 nvim-icat-setup	nvim-icat.txt	/*nvim-icat-setup*
 nvim-icat-troubleshooting	nvim-icat.txt	/*nvim-icat-troubleshooting*
