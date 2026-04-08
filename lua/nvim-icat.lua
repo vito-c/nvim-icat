@@ -357,6 +357,18 @@ end
 -- Returns terminal cell size in pixels as (cell_w, cell_h).
 -- Tries iTerm2 ReportCellSize, then tmux, then falls back to 8x16.
 local function get_cell_px_size()
+    -- In tmux, prefer the client cell size directly and avoid sending iTerm
+    -- ReportCellSize probes through the terminal multiplexer.
+    if os.getenv('TMUX') then
+        local h = io.popen("tmux display-message -p '#{client_cell_width} #{client_cell_height}' 2>/dev/null")
+        if h then
+            local out = h:read('*a')
+            h:close()
+            local cw, ch = out:match('(%d+) (%d+)')
+            if cw and ch then return tonumber(cw), tonumber(ch), "tmux" end
+        end
+    end
+
     -- 1. iTerm2 ReportCellSize.
     local cell_w, cell_h
     local autocmd_id
@@ -391,18 +403,7 @@ local function get_cell_px_size()
         return cell_w, cell_h, "iterm2"
     end
 
-    -- 2. tmux: #{client_cell_width} / #{client_cell_height}
-    if os.getenv('TMUX') then
-        local h = io.popen("tmux display-message -p '#{client_cell_width} #{client_cell_height}' 2>/dev/null")
-        if h then
-            local out = h:read('*a')
-            h:close()
-            local cw, ch = out:match('(%d+) (%d+)')
-            if cw and ch then return tonumber(cw), tonumber(ch), "tmux" end
-        end
-    end
-
-    -- 3. Fallback.
+    -- 2. Fallback.
     return 8, 16, "fallback"
 end
 
