@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat >&2 <<'EOF'
+Usage: icat-popup [--server <address>] <image>
+
+Opens <image> in the nvim-icat popup of an already-running Neovim instance.
+If --server is omitted, NVIM_LISTEN_ADDRESS is used.
+EOF
+}
+
+server="${NVIM_LISTEN_ADDRESS:-${NVIM}}"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -s|--server)
+      if [[ $# -lt 2 ]]; then
+        usage
+        exit 2
+      fi
+      server="$2"
+      shift 2
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    --)
+      shift
+      break
+      ;;
+    -*)
+      echo "icat-popup: unknown option: $1" >&2
+      usage
+      exit 2
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
+
+if [[ $# -ne 1 ]]; then
+  usage
+  exit 2
+fi
+
+if [[ -z "$server" ]]; then
+  echo "icat-popup: --server is required when NVIM_LISTEN_ADDRESS is unset" >&2
+  exit 2
+fi
+
+image="$1"
+if [[ "$image" != /* ]]; then
+  image="$PWD/$image"
+fi
+
+if [[ ! -f "$image" ]]; then
+  echo "icat-popup: image not found: $image" >&2
+  exit 1
+fi
+
+vim_quote() {
+  local value=${1//\'/\'\'}
+  printf "'%s'" "$value"
+}
+
+# quoted_path=$(vim_quote "$image")
+# expr='luaeval("(function(args) vim.schedule(function() local ok, icat = pcall(require, \"nvim-icat\"); if ok then icat.show_image_popup(args[1]) else vim.notify(\"nvim-icat unavailable: \" .. tostring(icat), vim.log.levels.ERROR) end end); return 1 end)(_A)", ['"$quoted_path"'])'
+expr="luaeval('(function() require(\"nvim-icat\").show_image_popup(_A); return \"\" end)()', $(vim_quote "$image"))"
+nvim --server "$server" --remote-expr "$expr" >/dev/null
