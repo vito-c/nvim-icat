@@ -22,9 +22,14 @@ A Neovim plugin for displaying images inline in iTerm2 using the Inline Images P
 
 ### Using [lazy.nvim](https://github.com/folke/lazy.nvim)
 
+For file browser popup hotness:
 ```lua
 return {
     'vito-c/nvim-icat',
+    file_browser = {
+        enabled = true,
+        key = '<CR>',
+    },
     config = function()
         require('nvim-icat').setup()
     end,
@@ -82,6 +87,24 @@ require('nvim-icat').setup({
 
 - `:IcatShow <path>` - Display an image from the specified path
 - `:IcatShowPop <path>` - Display an image in a floating popup
+- `:IcatTty` - Show TTY diagnostics for image rendering
+
+### CLI Popup
+
+`bin/icat-popup` opens an image popup in an already-running Neovim instance:
+
+```bash
+bin/icat-popup --server "$NVIM_LISTEN_ADDRESS" ./image.png
+```
+
+If `NVIM_LISTEN_ADDRESS` is set in the environment, you can omit `--server`:
+
+```bash
+bin/icat-popup ./image.png
+```
+
+The script sends a remote expression to Neovim and lets the running plugin handle
+TTY selection. It does not render the image from the shell process.
 
 ### File Browser Integration
 
@@ -181,8 +204,9 @@ All formats supported by iTerm2:
 
 1. Verify you're using iTerm2
 2. Check that inline images are enabled in iTerm2 preferences
-3. Enable debug logging to see what's happening
-4. Ensure the image file exists and is readable
+3. Run `:IcatTty` to check the render-time and startup TTY values
+4. Enable debug logging to see what's happening
+5. Ensure the image file exists and is readable
 
 ### Command not found
 

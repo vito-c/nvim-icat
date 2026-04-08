@@ -14,11 +14,12 @@ CONTENTS                                                 *nvim-icat-contents*
     5. Commands ......................... |nvim-icat-commands|
     6. Functions ........................ |nvim-icat-functions|
     7. Key Bindings ..................... |nvim-icat-keybindings|
-    8. Configuration .................... |nvim-icat-configuration|
-    9. Examples ......................... |nvim-icat-examples|
-   10. Debug Logging .................... |nvim-icat-debug|
-   11. Troubleshooting .................. |nvim-icat-troubleshooting|
-   12. About ............................ |nvim-icat-about|
+    8. CLI Popup ........................ |nvim-icat-cli|
+    9. Configuration .................... |nvim-icat-configuration|
+   10. Examples ......................... |nvim-icat-examples|
+   11. Debug Logging .................... |nvim-icat-debug|
+   12. Troubleshooting .................. |nvim-icat-troubleshooting|
+   13. About ............................ |nvim-icat-about|
 
 ==============================================================================
 1. INTRODUCTION                                      *nvim-icat-introduction*
@@ -124,6 +125,12 @@ With custom configuration:
         :IcatShowPop ./screenshot.png
 <
 
+                                                               *:IcatTty*
+:IcatTty
+    Show TTY diagnostics for image rendering, including the render-time imgcat
+    TTY, Neovim process TTY, startup TTY cache, configured fallback TTY, TERM,
+    TMUX, current buffer, buffer type, filetype, and window id.
+
 ==============================================================================
 6. FUNCTIONS                                            *nvim-icat-functions*
 
@@ -171,7 +178,25 @@ The image tab will also automatically close when you switch to another tab
 (TabLeave event).
 
 ==============================================================================
-8. CONFIGURATION                                    *nvim-icat-configuration*
+8. CLI POPUP                                                *nvim-icat-cli*
+
+The bin/icat-popup script opens an image popup in an already-running Neovim
+instance by sending a remote expression to the Neovim server.
+
+Use an explicit server address: >bash
+    bin/icat-popup --server "$NVIM_LISTEN_ADDRESS" ./image.png
+<
+
+If NVIM_LISTEN_ADDRESS is set in the environment, --server can be omitted: >bash
+    bin/icat-popup ./image.png
+<
+
+The script does not render the image from the shell process. It asks the
+running Neovim instance to call |:IcatShowPop|, so TTY selection stays inside
+the plugin.
+
+==============================================================================
+9. CONFIGURATION                                    *nvim-icat-configuration*
 
 nvim-icat can be configured by passing options to the setup function.
 
@@ -216,7 +241,7 @@ file_browser                                       *nvim-icat-file_browser*
 <
 
 ==============================================================================
-9. EXAMPLES                                              *nvim-icat-examples*
+10. EXAMPLES                                             *nvim-icat-examples*
 
 Display an image using the command:
 >
@@ -251,7 +276,7 @@ Create a custom key binding:
 <
 
 ==============================================================================
-10. DEBUG LOGGING                                          *nvim-icat-debug*
+11. DEBUG LOGGING                                          *nvim-icat-debug*
 
 To enable debug logging, set the IMGCAT_DEBUG environment variable before
 starting Neovim:
@@ -268,16 +293,17 @@ Debug logs will be written to:
 This is useful for troubleshooting issues with image display.
 
 ==============================================================================
-11. TROUBLESHOOTING                              *nvim-icat-troubleshooting*
+12. TROUBLESHOOTING                              *nvim-icat-troubleshooting*
 
 Images not displaying~
 
 1. Verify you're using iTerm2 (this plugin only works in iTerm2)
 2. Check that inline images are enabled in iTerm2 preferences:
    Preferences > General > Selection > "Copy to pasteboard on selection"
-3. Enable debug logging to see detailed information
-4. Ensure the image file exists and is readable
-5. Check that you're not in a nested tmux session (may cause issues)
+3. Run |:IcatTty| to inspect render-time and startup TTY values
+4. Enable debug logging to see detailed information
+5. Ensure the image file exists and is readable
+6. Check that you're not in a nested tmux session (may cause issues)
 
 Command :IcatShow not found~
 
@@ -300,7 +326,7 @@ Large images may take time to encode and display. Consider:
 3. Using compressed formats (JPEG vs PNG for photos)
 
 ==============================================================================
-12. ABOUT                                                  *nvim-icat-about*
+13. ABOUT                                                  *nvim-icat-about*
 
 nvim-icat is based on the iTerm2 imgcat script, reimplemented in Lua for
 seamless Neovim integration.

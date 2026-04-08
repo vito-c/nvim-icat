@@ -1,8 +1,10 @@
 :IcatShow	nvim-icat.txt	/*:IcatShow*
 :IcatShowPop	nvim-icat.txt	/*:IcatShowPop*
+:IcatTty	nvim-icat.txt	/*:IcatTty*
 icat	nvim-icat.txt	/*icat*
 nvim-icat	nvim-icat.txt	/*nvim-icat*
 nvim-icat-about	nvim-icat.txt	/*nvim-icat-about*
+nvim-icat-cli	nvim-icat.txt	/*nvim-icat-cli*
 nvim-icat-commands	nvim-icat.txt	/*nvim-icat-commands*
 nvim-icat-configuration	nvim-icat.txt	/*nvim-icat-configuration*
 nvim-icat-contents	nvim-icat.txt	/*nvim-icat-contents*
