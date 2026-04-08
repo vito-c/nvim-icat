@@ -93,12 +93,20 @@ local function get_tty_name()
     result = result:match("^%s*(.-)%s*$")
     debug_log("Found tty: " .. result)
     if result == "" then return nil end
+    if result == "not a tty" or not result:match("^/dev/") then return nil end
     return result
+end
+
+local function get_configured_tty_name()
+    if not vim or not vim.g then return nil end
+    local tty_name = vim.g.nvim_icat_tty
+    if not tty_name or tty_name == "" or not tty_name:match("^/dev/") then return nil end
+    return tty_name
 end
 
 local function make_writer()
     debug_log("Setting up TTY writer")
-    local tty_name = get_tty_name()
+    local tty_name = get_tty_name() or get_configured_tty_name()
     local tty = nil
     if tty_name then
         debug_log("TTY io writer " .. tty_name)

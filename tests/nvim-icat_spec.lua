@@ -20,9 +20,11 @@ local calls = {
     imgcat = {},
     imgcat_win = {},
     notifications = {},
+    oil_select = 0,
     snacks_win = nil,
     system = nil,
     popen = {},
+    forbidden_open = nil,
 }
 
 local original = {
@@ -81,6 +83,10 @@ io.popen = function(cmd)
 
     if cmd:match("^sips ") then
         return pipe("pixelWidth: 160\npixelHeight: 80\n")
+    elseif cmd == "tty 2>/dev/null" then
+        return pipe("/dev/ttys.imgcat\n")
+    elseif cmd:match("^ps %-o tty= %-p %d+ 2>/dev/null$") then
+        return pipe("ttys.nvim\n")
     elseif cmd:match("^%[ %-t 0 %]") then
         return pipe("terminal\n")
     elseif cmd:match("^which base64") then
@@ -134,6 +140,14 @@ icat.setup({
     },
 })
 
+vim.cmd("IcatTty")
+local tty_notification = calls.notifications[#calls.notifications]
+assert_match(tty_notification.message, "imgcat tty: /dev/ttys%.imgcat", "IcatTty should report the tty imgcat would use")
+assert_match(tty_notification.message, "nvim process tty: /dev/ttys%.nvim", "IcatTty should report the Neovim process tty")
+assert_match(tty_notification.message, "startup tty: /dev/ttys%.imgcat", "IcatTty should report the startup tty cache")
+assert_match(tty_notification.message, "vim%.g%.nvim_icat_tty: /dev/ttys%.imgcat", "IcatTty should report configured tty state")
+assert_eq(tty_notification.opts.title, "icat tty", "IcatTty should use a tty diagnostic notification title")
+
 local image_path = "/tmp/nvim-icat-test-image.png"
 vim.fn.writefile({ "fake image bytes" }, image_path, "b")
 
@@ -145,6 +159,43 @@ assert_eq(vim.api.nvim_buf_get_lines(0, 0, 1, false)[1], "  Path: " .. image_pat
 assert_match(calls.system, "imgcat%.lua", "IcatShow should invoke the imgcat script")
 assert_match(calls.system, "nvim%-icat%-test%-image%.png", "IcatShow should pass the image path to imgcat")
 assert_eq(calls.imgcat[#calls.imgcat][1], image_path, "IcatShow should render the image through imgcat")
+
+local oil_buf = vim.api.nvim_create_buf(false, true)
+vim.api.nvim_set_current_buf(oil_buf)
+vim.bo[oil_buf].filetype = "oil"
+package.loaded.oil = {
+    get_cursor_entry = function()
+        return { type = "file", name = "photo.png" }
+    end,
+    get_current_dir = function()
+        return "/tmp"
+    end,
+}
+calls.imgcat = {}
+calls.snacks_win = nil
+assert_eq(icat.open_file_browser_entry(), true, "oil image entries should open in the icat popup")
+assert_eq(calls.imgcat[#calls.imgcat][1], "/tmp/photo.png", "oil image entries should render the selected image")
+
+local oil_text_buf = vim.api.nvim_create_buf(false, true)
+vim.api.nvim_set_current_buf(oil_text_buf)
+vim.bo[oil_text_buf].filetype = "oil"
+package.loaded.oil = {
+    get_cursor_entry = function()
+        return { type = "file", name = "notes.txt" }
+    end,
+    get_current_dir = function()
+        return "/tmp"
+    end,
+}
+package.loaded["oil.actions"] = {
+    select = {
+        callback = function()
+            calls.oil_select = calls.oil_select + 1
+        end,
+    },
+}
+assert_eq(icat.open_file_browser_entry(), true, "oil non-image entries should fall through to oil select")
+assert_eq(calls.oil_select, 1, "oil non-image entries should call oil select")
 
 vim.cmd("tabprevious")
 calls.imgcat = {}
@@ -159,6 +210,28 @@ assert_eq(calls.snacks_win.width, 20, "IcatShowPop should size the popup from im
 assert_eq(calls.snacks_win.height, 6, "IcatShowPop should enforce the minimum popup height")
 assert_eq(calls.imgcat[#calls.imgcat][1], image_path, "IcatShowPop should render the image through imgcat")
 assert_eq(calls.imgcat_win[#calls.imgcat_win], vim.api.nvim_get_current_win(), "IcatShowPop should render inside the popup window")
+
+local original_popen = io.popen
+io.popen = function(cmd)
+    calls.popen[#calls.popen + 1] = cmd
+
+    if cmd:match("^sips ") then
+        return pipe("not image metadata\n")
+    elseif cmd:match("^%[ %-t 0 %]") then
+        return pipe("terminal\n")
+    elseif cmd:match("^which base64") then
+        return pipe("/usr/bin/base64\n")
+    end
+
+    return nil
+end
+calls.imgcat = {}
+calls.imgcat_win = {}
+calls.snacks_win = nil
+vim.cmd("IcatShowPop " .. vim.fn.fnameescape(image_path))
+assert_eq(calls.snacks_win.width, math.floor(vim.o.columns * 0.8), "IcatShowPop should fall back to editor width when image dimensions are unavailable")
+assert_eq(calls.snacks_win.height, math.floor(vim.o.lines * 0.8), "IcatShowPop should fall back to editor height when image dimensions are unavailable")
+io.popen = original_popen
 
 package.loaded.imgcat = nil
 local rendered = {}
@@ -175,6 +248,49 @@ assert_eq(calls.snacks_win.title, " nvim-icat-test-image.png ", "IcatShowPop sho
 assert_match(rendered_output, "\027%]1337;MultipartFile=inline=1", "IcatShowPop should emit the inline image header")
 assert_match(rendered_output, "\027%]1337;FilePart=", "IcatShowPop should emit image payload chunks")
 assert_match(rendered_output, "\027%]1337;FileEnd\007", "IcatShowPop should terminate the inline image")
+
+rendered = {}
+local tty_rendered = {}
+io.popen = function(cmd)
+    calls.popen[#calls.popen + 1] = cmd
+
+    if cmd == "tty 2>/dev/null" then
+        return pipe("not a tty\n")
+    elseif cmd:match("^sips ") then
+        return pipe("pixelWidth: 160\npixelHeight: 80\n")
+    elseif cmd:match("^%[ %-t 0 %]") then
+        return pipe("terminal\n")
+    elseif cmd:match("^which base64") then
+        return pipe("/usr/bin/base64\n")
+    end
+
+    return nil
+end
+io.open = function(path, mode)
+    if path == "not a tty" then
+        calls.forbidden_open = path
+        return nil
+    elseif path == "/dev/ttys.imgcat" then
+        return {
+            write = function(_, s)
+                tty_rendered[#tty_rendered + 1] = s
+            end,
+            flush = function() end,
+            close = function() end,
+        }
+    elseif path == "debug.txt" then
+        return {
+            write = function() end,
+            flush = function() end,
+            close = function() end,
+        }
+    end
+
+    return original.open(path, mode)
+end
+vim.cmd("IcatShowPop " .. vim.fn.fnameescape(image_path))
+assert_eq(calls.forbidden_open, nil, "imgcat should ignore invalid tty output")
+assert_match(table.concat(tty_rendered), "\027%]1337;MultipartFile=inline=1", "imgcat should fall back to the cached startup tty when render-time tty is invalid")
 
 vim.defer_fn = original.defer_fn
 vim.fn.filereadable = original.filereadable

@@ -144,6 +144,72 @@ local function check_imgcat()
     return true
 end
 
+local function read_command_output(cmd)
+    local handle = io.popen(cmd)
+    if not handle then return nil end
+    local result = handle:read("*a")
+    handle:close()
+    result = (result or ""):match("^%s*(.-)%s*$")
+    if result == "" then return nil end
+    return result
+end
+
+local function imgcat_tty_name()
+    local result = read_command_output("tty 2>/dev/null")
+    if not result or result == "not a tty" or not result:match("^/dev/") then
+        return nil
+    end
+    return result
+end
+
+local function nvim_process_tty_name()
+    local uv = vim.uv or vim.loop
+    if not uv or not uv.os_getpid then return nil end
+
+    local result = read_command_output(string.format("ps -o tty= -p %d 2>/dev/null", uv.os_getpid()))
+    if not result or result:match("^%?+$") then return nil end
+    if result:match("^/dev/") then return result end
+    return "/dev/" .. result
+end
+
+function M.tty_info()
+    local imgcat_tty = imgcat_tty_name()
+    local process_tty = nvim_process_tty_name()
+
+    return {
+        imgcat_tty = imgcat_tty,
+        nvim_process_tty = process_tty,
+        startup_tty = vim.g.nvim_icat_startup_tty,
+        configured_tty = vim.g.nvim_icat_tty,
+        term = vim.env.TERM,
+        tmux = vim.env.TMUX,
+        bufname = vim.api.nvim_buf_get_name(0),
+        buftype = vim.bo.buftype,
+        filetype = vim.bo.filetype,
+        win = vim.api.nvim_get_current_win(),
+    }
+end
+
+function M.notify_tty()
+    local info = M.tty_info()
+    local lines = {
+        "imgcat tty: " .. (info.imgcat_tty or "nil"),
+        "nvim process tty: " .. (info.nvim_process_tty or "nil"),
+        "startup tty: " .. (info.startup_tty or "nil"),
+        "vim.g.nvim_icat_tty: " .. (info.configured_tty or "nil"),
+        "TERM: " .. (info.term or "nil"),
+        "TMUX: " .. (info.tmux and "set" or "nil"),
+        "bufname: " .. (info.bufname ~= "" and info.bufname or "[No Name]"),
+        "buftype: " .. (info.buftype ~= "" and info.buftype or "normal"),
+        "filetype: " .. (info.filetype ~= "" and info.filetype or "none"),
+        "win: " .. tostring(info.win),
+    }
+    local message = table.concat(lines, "\n")
+    debug_log("tty diagnostics:\n" .. message)
+    vim.notify(message, vim.log.levels.INFO, { title = "icat tty" })
+    return info
+end
+
 -- Function to create image display tab
 local function create_image_tab(image_path)
     -- Create a new tab
@@ -485,6 +551,15 @@ function M.setup(opts)
         IMGCAT_SCRIPT = vim.fn.expand(opts.imgcat_path)
     end
     debug_log("imgcat script path: " .. IMGCAT_SCRIPT)
+    if not vim.g.nvim_icat_startup_tty then
+        vim.g.nvim_icat_startup_tty = imgcat_tty_name()
+        if vim.g.nvim_icat_startup_tty then
+            debug_log("cached startup tty: " .. vim.g.nvim_icat_startup_tty)
+        end
+    end
+    if not vim.g.nvim_icat_tty then
+        vim.g.nvim_icat_tty = vim.g.nvim_icat_startup_tty
+    end
 
     -- Create user commands
     vim.api.nvim_create_user_command('IcatShow', function(args)
@@ -501,6 +576,12 @@ function M.setup(opts)
         nargs = '?',
         complete = 'file',
         desc = 'Show image in a floating popup'
+    })
+
+    vim.api.nvim_create_user_command('IcatTty', function()
+        M.notify_tty()
+    end, {
+        desc = 'Show nvim-icat tty diagnostics'
     })
 
     setup_file_browser_mapping(opts.file_browser)
